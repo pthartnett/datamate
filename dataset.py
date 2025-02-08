@@ -35,3 +35,32 @@ class dataset:
             df = df.iloc[:, list(variables_to_keep)]
         else:
             df = df[list(variables_to_keep)]
+
+        
+
+        self.df = df
+        self.y = df[self.dependent_var] if self.dependent_var else None
+        self.x = df[self.independent_vars]
+
+        def return_original_format(self):
+            if self.original_format == pd.DataFrame:
+                return self.df
+            elif self.original_format == np.ndarray:
+                return self.df.to_numpy()
+            elif self.original_format == list:
+                return self.df.values.tolist()
+            else:
+                raise ValueError('Unexpected original format: '+str(self.return_original_format))
+            
+        def summary(self):
+            return {
+                'analysis_type':self.analysis_type,
+                'original_format':self.original_format,
+                'dependent_var':self.dependent_var,
+                'independent_vars':self.independent_vars,
+                'num_rows':self.df.shape[0],
+                'num_columns':self.df.shape[1],
+                'num_missing':self.df.isnull().sum().sum(),
+                'num_inf': (self.df == np.inf).sum().sum() + (self.df == -np.inf).sum().sum(),
+                'columns_with_missing': self.df.loc[:,self.df.isnull().sum()>0].isnull().sum().to_dict(),
+            }
