@@ -1,0 +1,15 @@
+Metadata-Version: 2.2
+Name: datamate
+Version: 0.1.0
+Summary: A Python library for statistical assumption testing and validation.
+Author: Patrick
+License:  
+        
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scipy
+Requires-Dist: statsmodels
+
+ 

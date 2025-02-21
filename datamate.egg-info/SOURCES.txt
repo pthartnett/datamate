@@ -1,0 +1,16 @@
+LICENSE
+README.md
+pyproject.toml
+datamate/__init__.py
+datamate/dataset.py
+datamate/transformations.py
+datamate/validate_data.py
+datamate/visualization.py
+datamate.egg-info/PKG-INFO
+datamate.egg-info/SOURCES.txt
+datamate.egg-info/dependency_links.txt
+datamate.egg-info/requires.txt
+datamate.egg-info/top_level.txt
+datamate/tests/test_dataset.py
+datamate/tests/test_validate_data.py
+tests/test_analysis.py
