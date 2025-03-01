@@ -8,6 +8,9 @@ from scipy.stats import shapiro, skew, kurtosis
 from statsmodels.stats.diagnostic import het_breuschpagan
 from statsmodels.stats.outliers_influence import variance_inflation_factor 
 from statsmodels.stats.outliers_influence import OLSInfluence
+from statsmodels.tsa.stattools import adfuller, acf, pacf
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 def validate_data_ols(ds):
     '''
@@ -59,6 +62,40 @@ def validate_data_ols(ds):
 
     return results
 
+def validate_data_arima(ds):
+    """
+    Validates whether a dataset meets assumptions for ARIMA time series modeling
+
+    Parameters:
+        ds (dataset): dataset with "arima" analysis type
+
+    Returns:
+        dict: Dictionary containing validation results
+    """
+    results = {}
+
+    if ds.x is None:
+        raise ValueError("Time series data must be provided.")
+
+    ts = ds.x.squeeze()  # Convert DataFrame to Series if necessary
+
+    #Stationary
+    adf_stat, adf_pval, _, _, critical_values, _ = adfuller(ts)
+    results["ADF Test p-value"] = adf_pval
+
+    #Residual autocorrelation
+    lb_stat, lb_pval = acorr_ljungbox(ts, lags=[10], return_df=False)
+    results["Ljung-Box p-value"] = lb_pval[0]
+
+    #Normal residuals
+    _, shapiro_pval = shapiro(ts)
+    results["Shapiro-Wilk p-value"] = shapiro_pval
+
+    #Autocorrelation & Partial Autocorrelation
+    results["Auto-correlation (ACF)"] = acf(ts, nlags=10).tolist()
+
+    return results
+
 def validate_data(ds):
     '''
     Validates whether dataset meets assumptions for its analysis type
@@ -72,5 +109,7 @@ def validate_data(ds):
     analysis_type_to_validate = ds.analysis_type
     if analysis_type_to_validate == 'ols':
         return validate_data_ols(ds)
+    elif analysis_type_to_validate == 'arima':
+        return validate_data_arima(ds)
     else:
         raise NotImplementedError('Validation for '+analysis_type_to_validate+' is not implemented yet.')
