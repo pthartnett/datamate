@@ -62,7 +62,68 @@ def validate_data_ols(ds):
 
     return results
 
-def validate_data_arima(ds):
+def check_stationarity(series, max_diffs=2):
+    """
+    Tests if a series is stationary using ADF test. If not, checks if differencing or log transformation helps
+
+    Parameters:
+        series (pd.Series): Time series to check
+        max_diffs (int): Maximum number of differencing steps to try
+
+    Returns:
+        dict: Results for stationarity tests
+    """
+    results = {}
+    
+    #Step 1: Raw Data Stationarity Test
+    adf_stat, adf_pval, _, _, critical_values, _ = adfuller(series.dropna())
+    results["Original ADF p-value"] = adf_pval
+    results["Stationary"] = adf_pval < 0.05
+
+    #Step 2: Differencing
+    if not results["Stationary"]:
+        for d in range(1, max_diffs + 1):
+            diff_series = series.diff(periods=d).dropna()
+            adf_stat, adf_pval, _, _, _, _ = adfuller(diff_series)
+            if adf_pval < 0.05:
+                results["Differencing Required"] = d
+                results["Stationary After Differencing"] = True
+                break
+        else:
+            results["Stationary After Differencing"] = False
+
+    #Step 3: Log Transformation
+    if not results["Stationary"] and (series > 0).all():
+        log_series = np.log(series).dropna()
+        adf_stat, adf_pval, _, _, _, _ = adfuller(log_series)
+        results["Log Transform Stationary"] = adf_pval < 0.05
+
+    return results
+
+def select_ar_ma(series, nlags=30):
+    """
+    Selects optimal AR and MA using PACF and ACF
+
+    Parameters:
+        series (pd.Series): Stationary time series.
+        nlags (int): Number of lags to check.
+
+    Returns:
+        dict: {'ar': [list of significant AR lags], 'ma': [list of significant MA lags]}.
+    """
+    acf_vals = acf(series, nlags=nlags, fft=False)
+    pacf_vals = pacf(series, nlags=nlags)
+
+    #Significance threshold (2/sqrt(N))
+    significance_threshold = 2 / np.sqrt(len(series))
+
+    #Select all significant lags for AR (PACF) and MA (ACF)
+    ar_lags = [i for i, v in enumerate(pacf_vals[1:], 1) if abs(v) > significance_threshold]
+    ma_lags = [i for i, v in enumerate(acf_vals[1:], 1) if abs(v) > significance_threshold]
+
+    return {"ar": ar_lags, "ma": ma_lags}
+
+def validate_data_arima(ds, nlags = 30):
     """
     Validates whether a dataset meets assumptions for ARIMA time series modeling
 
@@ -73,28 +134,49 @@ def validate_data_arima(ds):
         dict: Dictionary containing validation results
     """
     results = {}
+    stationary = {}
 
-    if ds.x is None:
+    if ds.y is None:
         raise ValueError("Time series data must be provided.")
 
-    ts = ds.x.squeeze()  # Convert DataFrame to Series if necessary
+    y_squeeze = ds.y.squeeze()  # Convert DataFrame to Series if necessary
 
     #Stationary
-    adf_stat, adf_pval, _, _, critical_values, _ = adfuller(ts)
-    results["ADF Test p-value"] = adf_pval
+    for col in [ds.y.name] + list(ds.x.columns):
+        stationary[col] = check_stationarity(ds.df[col])
+    results["Stationary"] = stationary
 
-    #Residual autocorrelation
-    lb_stat, lb_pval = acorr_ljungbox(ts, lags=[10], return_df=False)
-    results["Ljung-Box p-value"] = lb_pval[0]
+    #Optional differences for y variable
+    stationarity_results = check_stationarity(y_squeeze)
+    d = stationarity_results["Optimal difference (dependent)"]
 
-    #Normal residuals
-    _, shapiro_pval = shapiro(ts)
-    results["Shapiro-Wilk p-value"] = shapiro_pval
+    y_diff = y_squeeze.diff(periods=d).dropna() if d > 0 else y_squeeze
 
-    #Autocorrelation & Partial Autocorrelation
-    results["Auto-correlation (ACF)"] = acf(ts, nlags=10).tolist()
+    #Find All Significant AR and MA terms
+    ar_ma_lags = select_ar_ma(y_diff, nlags=nlags)
+
+    results["Optimal ARIMA (dependent)"] = (ar_ma_lags['ar'], d, ar_ma_lags['ma'])
+    results["Stationarity"] = stationarity_results
+
+    #Fit ARIMA Model with Multiple AR & MA Terms
+    #FIX ME this includes all terms, not just significant
+    arima_model = sm.tsa.ARIMA(y_squeeze, order=(max(ar_ma_lags['ar'], default=0), d, max(ar_ma_lags['ma'], default=0))).fit()
+    residuals = arima_model.resid
+
+    #Ljung-Box Test for Residual Autocorrelation
+    lb_stat, lb_pval = acorr_ljungbox(residuals, lags=[10], return_df=False)
+    results["Ljung-Box p-value (dependent)"] = lb_pval[0]
+
+    #Shapiro-Wilk Test for Residual Normality
+    _, shapiro_pval = shapiro(residuals)
+    results["Shapiro-Wilk p-value (dependent)"] = shapiro_pval
+
+    #Autocorrelation Function (ACF) on Residuals
+    results["Auto-correlation (ACF) (dependent)"] = acf(residuals, nlags=10, fft=False).tolist()
 
     return results
+
+
 
 def validate_data(ds):
     '''
