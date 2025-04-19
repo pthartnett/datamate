@@ -159,8 +159,18 @@ def validate_data_arima(ds, nlags = 30):
     results["Stationarity"] = stationarity_results
 
     #Fit ARIMA Model with Multiple AR & MA Terms
-    #FIX ME this includes all terms, not just significant
-    arima_model = sm.tsa.ARIMA(y_squeeze, order=(max(ar_ma_lags['ar'], default=0), d, max(ar_ma_lags['ma'], default=0))).fit()
+    residuals_init = y_diff - y_diff.mean()
+
+    arma_terms = pd.DataFrame({'y': y_diff})
+    for lag in ar_ma_lags['ar']:
+        arma_terms[f'lag_y_{lag}'] = y_diff.shift(lag)
+    for arma_terms in ar_ma_lags['ma']:
+        arma_terms[f'lag_resid_{lag}'] = residuals_init.shift(lag)
+    arma_terms = arma_terms.dropna()
+
+    X = sm.add_constant(arma_terms.drop(columns='y'))
+    arima_model = sm.OLS(arma_terms['y'], X).fit()
+    #arima_model = sm.tsa.ARIMA(y_squeeze, order=(max(ar_ma_lags['ar'], default=0), d, max(ar_ma_lags['ma'], default=0))).fit()
     residuals = arima_model.resid
 
     #Ljung-Box Test for Residual Autocorrelation
