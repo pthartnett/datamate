@@ -29,6 +29,9 @@ def validate_data_ols(ds):
     model = sm.OLS(ds.y,x_plus_const).fit()
     residuals = model.resid
     
+    #Summary
+    results['Summary'] = model.summary()
+
     #Linearity 
     vif_data = {ds.x.columns[i]: variance_inflation_factor(x_plus_const.values, i+1) for i in range(ds.x.shape[1])}
     results['Multicollinearity (VIF)'] = vif_data
@@ -148,7 +151,7 @@ def validate_data_arima(ds, nlags = 30):
 
     #Optional differences for y variable
     stationarity_results = check_stationarity(y_squeeze)
-    d = stationarity_results["Optimal difference (dependent)"]
+    d = stationarity_results["Differencing Required"]
 
     y_diff = y_squeeze.diff(periods=d).dropna() if d > 0 else y_squeeze
 
@@ -183,6 +186,15 @@ def validate_data_arima(ds, nlags = 30):
 
     #Autocorrelation Function (ACF) on Residuals
     results["Auto-correlation (ACF) (dependent)"] = acf(residuals, nlags=10, fft=False).tolist()
+
+    #Summary
+    results['Summary'] = arima_model.summary()
+
+    #AIC/BIC
+    results["AIC"] = arima_model.aic
+    results["BIC"] = arima_model.bic
+
+
 
     return results
 
